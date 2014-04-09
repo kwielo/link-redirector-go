@@ -1,0 +1,1 @@
+Redirection script with Go 
