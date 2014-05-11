@@ -1,10 +1,14 @@
 package main
 
 import (
-	"net/http"
-	// "github.com/bradfitz/gomemcache/memcache"
-	// "fmt"
+	"code.google.com/p/gcfg"
+	"database/sql"
+	"fmt"
+	"github.com/bradfitz/gomemcache/memcache"
+	_ "github.com/go-sql-driver/mysql"
 	"log"
+	"net/http"
+	"strings"
 )
 
 func main() {
@@ -12,22 +16,69 @@ func main() {
 	http.ListenAndServe(":8088", nil)
 }
 
-func linkHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Page loaded")
-
-	// w.WriteHeader(http.StatusTemporaryRedirect)
-
-	http.Redirect(w, r, "http://google.pl", http.StatusTemporaryRedirect)
-	// fmt.Fprintf(w, "<h1>Yo!%v</h1>", r.URL)
+type Redirection struct {
+	slug, url, err string
 }
 
-// func getLink() {
-// 	mc := memcache.New("127.0.0.1:11211")
-// 	mc.Set(&memcache.Item{Key: "fakje_1", Value: []byte("new value")})
+func linkHandler(w http.ResponseWriter, r *http.Request) {
+	slug := strings.Replace(fmt.Sprintf("%s", r.URL), "/", "", -1)
+	if slug == "favicon.ico" {
+		http.Error(w, "No redirection.", http.StatusNotFound)
+		return
+	}
 
-// 	link, err := mc.Get("fakje_1")
-// 	//TODO: this is a very bad error handling, change it!
-// 	if err != nil {
-// 		fmt.Errorf("err: %v\n", err)
-// 	}
-// }
+	rdct := Redirection{slug, "", ""}
+	rdct = getLink(rdct)
+
+	if rdct.err != "" {
+		http.Error(w, fmt.Sprintf("No redirection for: %s", rdct.slug), http.StatusNotFound)
+	} else {
+		http.Redirect(w, r, rdct.url, http.StatusMovedPermanently)
+	}
+
+}
+
+func getLink(rdct Redirection) Redirection {
+	mc := memcache.New("127.0.0.1:11211")
+
+	mcRedirection, err := mc.Get(rdct.slug)
+	if err != nil {
+		log.Printf("Cache miss for %s", rdct.slug)
+	}
+
+	if mcRedirection != nil {
+		log.Printf("Found in cache: %s => %s", rdct.slug, string(mcRedirection.Value))
+		rdct.url = string(mcRedirection.Value)
+	}
+
+	config := getConfig()
+	db, err := sql.Open("mysql", config.Db.User+":"+config.Db.Pass+"@/"+config.Db.Name)
+
+	var redirection string
+	if err = db.QueryRow("SELECT url FROM link WHERE tag = ?", rdct.slug).Scan(&redirection); err != nil {
+		rdct.err = "Redirection doesn't exist"
+	} else {
+		mc.Set(&memcache.Item{Key: rdct.slug, Value: []byte(redirection)})
+		rdct.url = redirection
+	}
+
+	return rdct
+}
+
+type Config struct {
+	Db struct {
+		Host string
+		User string
+		Pass string
+		Name string
+	}
+}
+
+func getConfig() Config {
+	var cfg Config
+	err := gcfg.ReadFileInto(&cfg, "config.gcfg")
+	if err != nil {
+		panic(fmt.Sprintf("error reading config file: ", err.Error()))
+	}
+	return cfg
+}
