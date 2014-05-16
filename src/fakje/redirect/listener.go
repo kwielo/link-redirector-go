@@ -4,7 +4,7 @@ import (
 	"code.google.com/p/gcfg"
 	"database/sql"
 	"fmt"
-	"github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"net/http"
 	"strings"
@@ -47,12 +47,15 @@ func getLink(rdct Redirection) Redirection {
 	if url == "" {
 		log.Printf("Cache miss for %s", rdct.slug)
 	} else {
-		// log.Printf("Found in cache: %s => %s", rdct.slug, url)
+		log.Printf("Found in cache: %s => %s", rdct.slug, url)
 		rdct.url = url
 		return rdct
 	}
 
 	db, err := sql.Open("mysql", config.Db.User+":"+config.Db.Pass+"@/"+config.Db.Name)
+	if err != nil {
+		log.Printf("Error with db connection: %s", err.Error())
+	}
 
 	var redirection string
 	if err = db.QueryRow("SELECT url FROM link WHERE tag = ?", rdct.slug).Scan(&redirection); err != nil {

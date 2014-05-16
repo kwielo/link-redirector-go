@@ -15,7 +15,7 @@ GOinstall() {
 		GOsetenv
 	fi
 	echo "Intalling go script"
-	cd src/fakje/gogogo
+	cd src/fakje/redirect
 	go install
 }
 
@@ -24,7 +24,7 @@ GOrun() {
 	echo "Running script"
 	echo "---"
 	cd $pwd/bin/
-	./gogogo
+	./redirect
 }
 
 case $1 in
