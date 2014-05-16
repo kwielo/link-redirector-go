@@ -4,14 +4,17 @@ import (
 	"code.google.com/p/gcfg"
 	"database/sql"
 	"fmt"
-	"github.com/bradfitz/gomemcache/memcache"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"log"
 	"net/http"
 	"strings"
 )
 
+var config Config
+var cache = map[string]string{}
+
 func main() {
+	config = getConfig()
 	http.HandleFunc("/", linkHandler)
 	http.ListenAndServe(":8088", nil)
 }
@@ -31,7 +34,7 @@ func linkHandler(w http.ResponseWriter, r *http.Request) {
 	rdct = getLink(rdct)
 
 	if rdct.err != "" {
-		http.Error(w, fmt.Sprintf("No redirection for: %s", rdct.slug), http.StatusNotFound)
+		http.Error(w, fmt.Sprintf("No redirection for: %s, cause: %s", rdct.slug, rdct.err), http.StatusNotFound)
 	} else {
 		http.Redirect(w, r, rdct.url, http.StatusMovedPermanently)
 	}
@@ -39,26 +42,23 @@ func linkHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getLink(rdct Redirection) Redirection {
-	mc := memcache.New("127.0.0.1:11211")
 
-	mcRedirection, err := mc.Get(rdct.slug)
-	if err != nil {
+	url := cache[rdct.slug]
+	if url == "" {
 		log.Printf("Cache miss for %s", rdct.slug)
+	} else {
+		// log.Printf("Found in cache: %s => %s", rdct.slug, url)
+		rdct.url = url
+		return rdct
 	}
 
-	if mcRedirection != nil {
-		log.Printf("Found in cache: %s => %s", rdct.slug, string(mcRedirection.Value))
-		rdct.url = string(mcRedirection.Value)
-	}
-
-	config := getConfig()
 	db, err := sql.Open("mysql", config.Db.User+":"+config.Db.Pass+"@/"+config.Db.Name)
 
 	var redirection string
 	if err = db.QueryRow("SELECT url FROM link WHERE tag = ?", rdct.slug).Scan(&redirection); err != nil {
 		rdct.err = "Redirection doesn't exist"
 	} else {
-		mc.Set(&memcache.Item{Key: rdct.slug, Value: []byte(redirection)})
+		cache[rdct.slug] = redirection
 		rdct.url = redirection
 	}
 
