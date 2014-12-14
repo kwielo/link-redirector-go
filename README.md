@@ -1,1 +1,1 @@
-Redirection script with Go 
+## fakje redirect service ##
