@@ -87,7 +87,7 @@ type Config struct {
 
 func getConfig() Config {
 	var cfg Config
-	err := gcfg.ReadFileInto(&cfg, "config.gcfg")
+	err := gcfg.ReadFileInto(&cfg, "/etc/fakjed.conf")
 	if err != nil {
 		panic(fmt.Sprintf("error reading config file: ", err.Error()))
 	}
