@@ -1,7 +1,11 @@
 # Created by http://www.gitignore.io
 
+# IDE
+.idea/
+
 ### Go ###
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
+bin/*
 *.o
 *.a
 *.so
